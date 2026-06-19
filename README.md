@@ -90,7 +90,7 @@ python validate_submission.py data/outputs/team_rishita.csv
 To boot up the interactive Streamlit UI dashboard locally, execute:
 ```bash
 streamlit run app.py
-
+```
 
 ## Architecture Diagram
 
