@@ -1,0 +1,4 @@
+setuptools>=65.0.0
+wheel>=0.38.0
+streamlit>=1.30.0
+watchdog>=3.0.0
