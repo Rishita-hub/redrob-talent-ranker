@@ -317,39 +317,62 @@ def main():
     open_func = gzip.open if args.candidates.endswith(".gz") else open
     mode = "rt" if args.candidates.endswith(".gz") else "r"
     
+   # === UPDATED SAFE PARSING LOGIC ===
+    raw_content = ""
     with open_func(args.candidates, mode, encoding="utf-8") as f:
-        for line in f:
-            if not line.strip(): continue
-            cand = json.loads(line)
-            
-            cid = cand.get("candidate_id", "").strip()
-            if not cid or cid in seen_ids:
+        raw_content = f.read()
+
+    # Ek dynamic list banate hain jisme saare parse kiye hue candidates aayenge
+    parsed_candidates_list = []
+    content_stripped = raw_content.strip()
+
+    # Check Scenario A: Agar standard JSON format array hai ([...])
+    if content_stripped.startswith('[') and content_stripped.endswith(']'):
+        try:
+            parsed_candidates_list = json.loads(content_stripped)
+        except Exception:
+            pass
+
+    # Check Scenario B: Agar array nahi hai, toh use line-by-line JSONL ki tarah treat karo
+    if not parsed_candidates_list:
+        for line in raw_content.splitlines():
+            if not line.strip(): 
                 continue
-                
-            sorted_history_tuples = extract_chronological_history(cand)
-            raw_score, matched_skills, companies = evaluate_candidate_profile(cand, jd_profile, sorted_history_tuples)
+            try:
+                cand = json.loads(line)
+                parsed_candidates_list.append(cand)
+            except Exception:
+                continue
+
+    for cand in parsed_candidates_list:
+        cid = cand.get("candidate_id", "").strip()
+        if not cid or cid in seen_ids:
+            continue
             
-            yoe = cand.get("profile", {}).get("years_of_experience", 0)
-            signals = cand.get("redrob_signals", {}) or {}
-            notice = int(signals.get("notice_period_days", 60))
-            
-            record = {
-                "candidate_id": cid,
-                "raw_score": raw_score,
-                "yoe": yoe,
-                "matched_skills": matched_skills,
-                "companies": companies,
-                "notice": notice
-            }
-            
-            seen_ids.add(cid)
-            absolute_emergency_pool.append(record)
-            
-            if is_malicious_honeypot(cand, sorted_history_tuples):
-                record["raw_score"] -= 500.0
-                honeypot_backup_pool.append(record)
-            else:
-                valid_ranked_records.append(record)
+        sorted_history_tuples = extract_chronological_history(cand)
+        raw_score, matched_skills, companies = evaluate_candidate_profile(cand, jd_profile, sorted_history_tuples)
+        
+        yoe = cand.get("profile", {}).get("years_of_experience", 0)
+        signals = cand.get("redrob_signals", {}) or {}
+        notice = int(signals.get("notice_period_days", 60))
+        
+        record = {
+            "candidate_id": cid,
+            "raw_score": raw_score,
+            "yoe": yoe,
+            "matched_skills": matched_skills,
+            "companies": companies,
+            "notice": notice
+        }
+        
+        seen_ids.add(cid)
+        absolute_emergency_pool.append(record)
+        
+        if is_malicious_honeypot(cand, sorted_history_tuples):
+            record["raw_score"] -= 500.0
+            honeypot_backup_pool.append(record)
+        else:
+            valid_ranked_records.append(record)
 
     # Global Linear Fractional Scaling (0.0000 - 1.0000 Spectrum)
     all_raw_scores = [x["raw_score"] for x in absolute_emergency_pool]
